@@ -225,7 +225,6 @@ public class WavUtility
 			filepath = null;
 		}
 
-		stream.Close ();
 		stream.Dispose ();
 
 		return bytes;
@@ -335,7 +334,6 @@ public class WavUtility
 		// Validate converted bytes
 		Debug.AssertFormat (data.Length * x == bytes.Length, "Unexpected float[] to Int16 to byte[] size: {0} == {1}", data.Length * x, bytes.Length);
 
-		dataStream.Close ();
 		dataStream.Dispose ();
 
 		return bytes;
