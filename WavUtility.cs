@@ -5,7 +5,7 @@ using System;
 
 /// <summary>
 /// WAV utility for recording and audio playback functions in Unity.
-/// Version: 1.0 beta 1
+/// Version: 1.0 alpha 1
 ///
 /// - Use "ToAudioClip" method for loading wav file / bytes.
 /// Loads .wav (PCM uncompressed) files at 8,16,24 and 32 bits and converts data to Unity's AudioClip.
@@ -19,6 +19,9 @@ using System;
 
 public class WavUtility
 {
+	// Force save as 16-bit .wav
+	const int BlockSize_16Bit = 2;
+
 	/// <summary>
 	/// Load PCM format *.wav audio file (using Unity's Application data path) and convert to AudioClip.
 	/// </summary>
@@ -195,13 +198,13 @@ public class WavUtility
 		const int headerSize = 44;
 
 		// get bit depth
-		UInt16 bitDepth = BitDepth (audioClip);
+		UInt16 bitDepth = 16; //BitDepth (audioClip);
 
 		// NB: Only supports 16 bit
-		Debug.AssertFormat (bitDepth == 16, "Only converting 16 bit is currently supported. The audio clip data is {0} bit.", bitDepth);
+		//Debug.AssertFormat (bitDepth == 16, "Only converting 16 bit is currently supported. The audio clip data is {0} bit.", bitDepth);
 
 		// total file size = 44 bytes for header format and audioClip.samples * factor due to float to Int16 / sbyte conversion
-		int fileSize = audioClip.samples * BlockSize (bitDepth) + headerSize;
+		int fileSize = audioClip.samples * BlockSize_16Bit + headerSize; // BlockSize (bitDepth)
 
 		// chunk descriptor (riff)
 		WriteFileHeader (ref stream, fileSize);
@@ -301,7 +304,7 @@ public class WavUtility
 		byte[] id = Encoding.ASCII.GetBytes ("data");
 		count += WriteBytesToMemoryStream (ref stream, id, "DATA_ID");
 
-		int subchunk2Size = Convert.ToInt32 (audioClip.samples * BlockSize (bitDepth));
+		int subchunk2Size = Convert.ToInt32 (audioClip.samples * BlockSize_16Bit); // BlockSize (bitDepth)
 		count += WriteBytesToMemoryStream (ref stream, BitConverter.GetBytes (subchunk2Size), "SAMPLES");
 
 		// Validate header
