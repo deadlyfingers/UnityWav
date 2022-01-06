@@ -37,24 +37,63 @@ public class WavUtility
 		return ToAudioClip (fileBytes, 0);
 	}
 
+	private static void FindChunk(ref int position,string key,byte[] fileBytes)
+	{
+		bool result = true;
+		do
+		{
+			position += 4;
+			int junkSize = BitConverter.ToInt32(fileBytes, position);
+			position += 4;
+			position += junkSize;
+			string nexChunks = Encoding.ASCII.GetString(fileBytes, position, key.Length);
+			if (nexChunks==key)
+			{
+				result = false;
+			}
+		} while (result);
+	}
+
 	public static AudioClip ToAudioClip (byte[] fileBytes, int offsetSamples = 0, string name = "wav")
 	{
+		int position = 0;
 		//string riff = Encoding.ASCII.GetString (fileBytes, 0, 4);
+		position += 4;//riff
+		position += 4;//size
 		//string wave = Encoding.ASCII.GetString (fileBytes, 8, 4);
-		int subchunk1 = BitConverter.ToInt32 (fileBytes, 16);
-		UInt16 audioFormat = BitConverter.ToUInt16 (fileBytes, 20);
+		position += 4;//wave
+		string junk = Encoding.ASCII.GetString(fileBytes, 12, 4);
+		
+		if (junk=="JUNK") //JUNK Chunks
+		{
+			//position += 4;//junk
+			FindChunk( ref position,"fmt ",fileBytes);
+		}
+
+		position += 4;//subchunk
+		int subchunk1 = BitConverter.ToInt32 (fileBytes, position);
+		UInt16 audioFormat = BitConverter.ToUInt16 (fileBytes, position+4);
+		if (audioFormat != 1 && audioFormat != 65524) return null;
 
 		// NB: Only uncompressed PCM wav files are supported.
 		string formatCode = FormatCode (audioFormat);
 		Debug.AssertFormat (audioFormat == 1 || audioFormat == 65534, "Detected format code '{0}' {1}, but only PCM and WaveFormatExtensable uncompressed formats are currently supported.", audioFormat, formatCode);
 
-		UInt16 channels = BitConverter.ToUInt16 (fileBytes, 22);
-		int sampleRate = BitConverter.ToInt32 (fileBytes, 24);
+		UInt16 channels = BitConverter.ToUInt16 (fileBytes, position+6);
+		int sampleRate = BitConverter.ToInt32 (fileBytes, position+8);
 		//int byteRate = BitConverter.ToInt32 (fileBytes, 28);
 		//UInt16 blockAlign = BitConverter.ToUInt16 (fileBytes, 32);
-		UInt16 bitDepth = BitConverter.ToUInt16 (fileBytes, 34);
+		UInt16 bitDepth = BitConverter.ToUInt16 (fileBytes, position+18);
 
-		int headerOffset = 16 + 4 + subchunk1 + 4;
+		int headerOffset = position + 4 + subchunk1;
+
+		string secondchunk = Encoding.ASCII.GetString(fileBytes, headerOffset, 4);
+		if (secondchunk!="data")
+		{
+			//jump other chunk like minf chunk
+			FindChunk(ref headerOffset, "data",fileBytes);
+		}
+		headerOffset += 4;	
 		int subchunk2 = BitConverter.ToInt32 (fileBytes, headerOffset);
 		//Debug.LogFormat ("riff={0} wave={1} subchunk1={2} format={3} channels={4} sampleRate={5} byteRate={6} blockAlign={7} bitDepth={8} headerOffset={9} subchunk2={10} filesize={11}", riff, wave, subchunk1, formatCode, channels, sampleRate, byteRate, blockAlign, bitDepth, headerOffset, subchunk2, fileBytes.Length);
 
@@ -73,7 +112,8 @@ public class WavUtility
 			data = Convert32BitByteArrayToAudioClipData (fileBytes, headerOffset, subchunk2);
 			break;
 		default:
-			throw new Exception (bitDepth + " bit depth is not supported.");
+			Debug.Log (bitDepth + " bit depth is not supported.");
+			return null;
 		}
 
 		AudioClip audioClip = AudioClip.Create (name, data.Length, (int)channels, sampleRate, false);
@@ -81,6 +121,69 @@ public class WavUtility
 		return audioClip;
 	}
 
+	public static float[] ToAudioData(byte[] fileBytes)
+	{
+		int position = 0;
+		//string riff = Encoding.ASCII.GetString (fileBytes, 0, 4);
+		position += 4;//riff
+		position += 4;//size
+		//string wave = Encoding.ASCII.GetString (fileBytes, 8, 4);
+		position += 4;//wave
+		string junk = Encoding.ASCII.GetString(fileBytes, 12, 4);
+		
+		if (junk=="JUNK") //JUNK Chunks
+		{
+			FindChunk( ref position,"fmt ",fileBytes);
+		}
+		
+		position += 4;//subchunk
+		int subchunk1 = BitConverter.ToInt32 (fileBytes, position);
+		UInt16 audioFormat = BitConverter.ToUInt16 (fileBytes, position+4);
+		if (audioFormat != 1 && audioFormat != 65524) return null;
+
+		// NB: Only uncompressed PCM wav files are supported.
+		string formatCode = FormatCode (audioFormat);
+		Debug.AssertFormat (audioFormat == 1 || audioFormat == 65534, "Detected format code '{0}' {1}, but only PCM and WaveFormatExtensable uncompressed formats are currently supported.", audioFormat, formatCode);
+
+		//UInt16 channels = BitConverter.ToUInt16 (fileBytes, position+6);
+		//int sampleRate = BitConverter.ToInt32 (fileBytes, position+8);
+		//int byteRate = BitConverter.ToInt32 (fileBytes, 28);
+		//UInt16 blockAlign = BitConverter.ToUInt16 (fileBytes, 32);
+		UInt16 bitDepth = BitConverter.ToUInt16 (fileBytes, position+18);
+
+		int headerOffset = position + 4 + subchunk1;
+
+		string secondchunk = Encoding.ASCII.GetString(fileBytes, headerOffset, 4);
+		if (secondchunk!="data")
+		{
+			//jump other chunk like minf chunk
+			FindChunk(ref headerOffset, "data",fileBytes);
+		}
+		headerOffset += 4;	
+		int subchunk2 = BitConverter.ToInt32 (fileBytes, headerOffset);
+		//Debug.LogFormat ("riff={0} wave={1} subchunk1={2} format={3} channels={4} sampleRate={5} byteRate={6} blockAlign={7} bitDepth={8} headerOffset={9} subchunk2={10} filesize={11}", riff, wave, subchunk1, formatCode, channels, sampleRate, byteRate, blockAlign, bitDepth, headerOffset, subchunk2, fileBytes.Length);
+
+		float[] data;
+		switch (bitDepth) {
+		case 8:
+			data = Convert8BitByteArrayToAudioClipData (fileBytes, headerOffset, subchunk2);
+			break;
+		case 16:
+			data = Convert16BitByteArrayToAudioClipData (fileBytes, headerOffset, subchunk2);
+			break;
+		case 24:
+			data = Convert24BitByteArrayToAudioClipData (fileBytes, headerOffset, subchunk2);
+			break;
+		case 32:
+			data = Convert32BitByteArrayToAudioClipData (fileBytes, headerOffset, subchunk2);
+			break;
+		default:
+			Debug.Log (bitDepth + " bit depth is not supported.");
+			return null;
+		}
+		return data;
+	}
+	
 	#region wav file bytes to Unity AudioClip conversion methods
 
 	private static float[] Convert8BitByteArrayToAudioClipData (byte[] source, int headerOffset, int dataSize)
