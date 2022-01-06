@@ -66,7 +66,7 @@ public class WavUtility
 		
 		if (junk=="JUNK") //JUNK Chunks
 		{
-			position += 4;//junk
+			//position += 4;//junk
 			FindChunk( ref position,"fmt ",fileBytes);
 		}
 
@@ -121,8 +121,6 @@ public class WavUtility
 		return audioClip;
 	}
 
-<<<<<<< HEAD
-=======
 	public static float[] ToAudioData(byte[] fileBytes)
 	{
 		int position = 0;
@@ -186,7 +184,6 @@ public class WavUtility
 		return data;
 	}
 	
->>>>>>> 2ddb645 (fix little bug)
 	#region wav file bytes to Unity AudioClip conversion methods
 
 	private static float[] Convert8BitByteArrayToAudioClipData (byte[] source, int headerOffset, int dataSize)
